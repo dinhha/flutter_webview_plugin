@@ -103,10 +103,11 @@ class _WebviewScaffoldState extends State<WebviewScaffold> {
         appBar: widget.appBar,
         persistentFooterButtons: widget.persistentFooterButtons,
         bottomNavigationBar: widget.bottomNavigationBar,
-        body: const Center(child: const CircularProgressIndicator(),
+        body: const Center(child: const CircularProgressIndicator()),
         floatingActionButton: widget.floatingActionButton,
         floatingActionButtonLocation: widget.floatingActionButtonLocation,
-        floatingActionButtonAnimator: widget.floatingActionButtonAnimator));
+        floatingActionButtonAnimator: widget.floatingActionButtonAnimator
+        );
   }
 
   Rect _buildRect(BuildContext context) {
