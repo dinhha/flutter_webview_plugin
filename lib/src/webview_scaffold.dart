@@ -12,6 +12,8 @@ class WebviewScaffold extends StatefulWidget {
   final bool clearCache;
   final bool clearCookies;
   final bool enableAppScheme;
+  final bool isPost;
+  final Map<String, dynamic> body;
   final String userAgent;
   final bool primary;
   final List<Widget> persistentFooterButtons;
@@ -36,6 +38,8 @@ class WebviewScaffold extends StatefulWidget {
       this.clearCache,
       this.clearCookies,
       this.enableAppScheme,
+      this.isPost,
+      this.body,
       this.userAgent,
       this.primary = true,
       this.persistentFooterButtons,
@@ -82,6 +86,8 @@ class _WebviewScaffoldState extends State<WebviewScaffold> {
           clearCache: widget.clearCache,
           clearCookies: widget.clearCookies,
           enableAppScheme: widget.enableAppScheme,
+          isPost: widget.isPost,
+          body: widget.body,
           userAgent: widget.userAgent,
           rect: _rect,
           withZoom: widget.withZoom,

@@ -128,6 +128,8 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     if (self.webview != nil) {
             NSString *url = call.arguments[@"url"];
             NSNumber *withLocalUrl = call.arguments[@"withLocalUrl"];
+            NSNumber *isPost = call.arguments[@"isPost"];
+            
             if ( [withLocalUrl boolValue]) {
                 NSURL *htmlUrl = [NSURL fileURLWithPath:url isDirectory:false];
                 if (@available(iOS 9.0, *)) {
@@ -141,6 +143,27 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
                 
                 if (headers != nil) {
                     [request setAllHTTPHeaderFields:headers];
+                }
+
+                if (isPost != nil) {
+                    if ([isPost boolValue]) {
+                        /// If this is a post request then set the method and body
+                        [request setHTTPMethod:@"POST"];
+
+                        NSDictionary *body = call.arguments[@"body"];
+
+                        NSError *error = nil;
+                        NSData *jsonData = [NSJSONSerialization dataWithJSONObject:body
+                                                                options:NSJSONWritingPrettyPrinted
+                                                                error:&error];
+                        
+                        /// Check if there is an error
+                        if (!jsonData) {
+                            NSLog(@"Error parsing JSON %@", error);
+                        } else {
+                            [request setHTTPBody:jsonData];
+                        }
+                    }
                 }
                 
                 [self.webview loadRequest:request];
@@ -224,7 +247,7 @@ static NSString *const CHANNEL_NAME = @"flutter_webview_plugin";
     if (_enableAppScheme ||
         ([webView.URL.scheme isEqualToString:@"http"] ||
          [webView.URL.scheme isEqualToString:@"https"] ||
-         [webView.URL.scheme isEqualToString:@"about"])) {
+         [webView.URL.scheme isEqualToString:@"aBoolbout"])) {
         decisionHandler(WKNavigationActionPolicyAllow);
     } else {
         decisionHandler(WKNavigationActionPolicyCancel);
