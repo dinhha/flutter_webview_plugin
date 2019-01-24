@@ -88,6 +88,8 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
         boolean withLocalStorage = call.argument("withLocalStorage");
         Map<String, String> headers = call.argument("headers");
         boolean scrollBar = call.argument("scrollBar");
+        boolean isPost = call.argument("isPost");
+        Map<String, Object> body = call.argument("body");
 
         if (webViewManager == null || webViewManager.closed == true) {
             webViewManager = new WebviewManager(activity);
@@ -96,6 +98,8 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
         FrameLayout.LayoutParams params = buildLayoutParams(call);
 
         activity.addContentView(webViewManager.webView, params);
+
+        System.out.println(body);
 
         webViewManager.openUrl(withJavascript,
                 clearCache,
@@ -106,7 +110,9 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
                 headers,
                 withZoom,
                 withLocalStorage,
-                scrollBar
+                scrollBar,
+                isPost,
+                body
         );
         result.success(null);
     }
@@ -172,6 +178,8 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
     private void reloadUrl(MethodCall call, MethodChannel.Result result) {
         if (webViewManager != null) {
             String url = call.argument("url");
+            boolean isPost = call.argument("isPost");
+            Map<String, Object> body = call.argument("body");
             webViewManager.openUrl(false,
                     false,
                     false,
@@ -181,7 +189,9 @@ public class FlutterWebviewPlugin implements MethodCallHandler, PluginRegistry.A
                     null,
                     false,
                     false,
-                    false
+                    false,
+                    isPost,
+                    body
             );
         }
     }

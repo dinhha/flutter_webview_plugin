@@ -15,9 +15,20 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.os.AsyncTask;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.io.InputStreamReader;
+import java.net.URL;
+import java.net.HttpURLConnection;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.io.BufferedReader;
+import java.io.DataOutputStream;
+
+import 	org.json.JSONObject;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -131,7 +142,7 @@ class WebviewManager {
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.addCategory(Intent.CATEGORY_OPENABLE);
                 i.setType("*/*");
-               activity.startActivityForResult(
+                activity.startActivityForResult(
                         Intent.createChooser(i, "File Browser"),
                         FILECHOOSER_RESULTCODE);
             }
@@ -189,7 +200,20 @@ class WebviewManager {
         webView.clearFormData();
     }
 
-    void openUrl(boolean withJavascript, boolean clearCache, boolean hidden, boolean clearCookies, String userAgent, String url, Map<String, String> headers, boolean withZoom, boolean withLocalStorage, boolean scrollBar) {
+    void openUrl(
+        boolean withJavascript,
+        boolean clearCache,
+        boolean hidden,
+        boolean clearCookies,
+        String userAgent,
+        String url,
+        Map<String, String> headers,
+        boolean withZoom,
+        boolean withLocalStorage,
+        boolean scrollBar,
+        boolean isPost,
+        Map<String, Object> body
+    ) {
         webView.getSettings().setJavaScriptEnabled(withJavascript);
         webView.getSettings().setBuiltInZoomControls(withZoom);
         webView.getSettings().setSupportZoom(withZoom);
@@ -210,16 +234,41 @@ class WebviewManager {
         if (userAgent != null) {
             webView.getSettings().setUserAgentString(userAgent);
         }
-      
+
         if(!scrollBar){
             webView.setVerticalScrollBarEnabled(false);
         }
 
-        if (headers != null) {
-            webView.loadUrl(url, headers);
+        if (isPost && body != null) {
+            PostUrlTask task = new PostUrlTask();
+            task.setListener(createPostUrlTaskListener(url));
+
+            PostUrlInput input = new PostUrlInput(url, headers, body, userAgent);
+
+            task.execute(input);
+
         } else {
-            webView.loadUrl(url);
+            if (headers != null) {
+                webView.loadUrl(url, headers);
+            } else {
+                webView.loadUrl(url);
+            }
         }
+    }
+
+    /// Helper method for creating the listener for the Post Url task
+    private PostUrlTask.Listener createPostUrlTaskListener(String url) {
+        final String urlString = url;
+        return new PostUrlTask.Listener() {
+            @Override
+            public void onSuccess(PostUrlResult result) {
+                if (result.responseStatus == "HTTP_OK") {
+                    webView.loadDataWithBaseURL(urlString, result.htmlResult, "text/html", "utf-8", null);
+                } else {
+                    // Do nothing for now // Show error page?
+                }
+            }
+        };
     }
 
     void close(MethodCall call, MethodChannel.Result result) {
@@ -306,5 +355,161 @@ class WebviewManager {
         if (webView != null){
             webView.stopLoading();
         }
+    }
+}
+
+class PostUrlInput {
+    PostUrlInput(
+        String urlString,
+        Map<String, String> headers,
+        Map<String, Object> body,
+        String userAgent
+    ){
+        this.urlString = urlString;
+        this.headers = headers;
+        this.body = body;
+        this.userAgent = userAgent;
+    }
+
+    String urlString;
+    Map<String, String> headers;
+    Map<String, Object> body;
+    String userAgent;
+}
+
+class PostUrlResult {
+    PostUrlResult(String responseStatus, String htmlResult) {
+        this.responseStatus = responseStatus;
+        this.htmlResult = htmlResult;
+    }
+
+    String responseStatus;
+    String htmlResult;
+}
+
+// Since Android WebView does not support loading POST with
+// custom header, this class is used to get the html needed
+// to make a POST request and show the response to WebView
+class PostUrlTask extends AsyncTask<PostUrlInput, Void, PostUrlResult> {
+
+    private Listener listener;
+
+    // 非同期処理
+    @Override
+    protected PostUrlResult doInBackground(PostUrlInput... params) {
+
+        HttpURLConnection httpConn = null;
+        String responseStatus = null;
+        String htmlResult = "";
+        PostUrlInput input = params[0];
+
+        try {
+            // URL設定
+            URL url = new URL(input.urlString);
+
+            // HttpURLConnection
+            httpConn = (HttpURLConnection) url.openConnection();
+
+            // request POST
+            httpConn.setRequestMethod("POST");
+
+            // no Redirects
+            httpConn.setInstanceFollowRedirects(false);
+
+            httpConn.setDoOutput(true);
+
+            // Set headers
+            if (input.headers != null){
+                for (Map.Entry<String, String> header : input.headers.entrySet()){
+                    httpConn.setRequestProperty(header.getKey(), header.getValue());
+                }
+            }
+
+            // Set user agent
+            if(input.userAgent != null) {
+                httpConn.setRequestProperty("User-Agent", input.userAgent);
+            }
+
+            httpConn.setReadTimeout(10000);
+            httpConn.setConnectTimeout(20000);
+
+            httpConn.connect();
+
+            OutputStream outStream = null;
+
+            try {
+                outStream = new DataOutputStream(httpConn.getOutputStream ());
+
+                JSONObject bodyJson = new JSONObject(input.body);
+
+                outStream = httpConn.getOutputStream();
+                outStream.write( bodyJson.toString().getBytes("UTF-8"));
+
+                outStream.flush();
+
+                Log.d("debug","flush");
+            } catch (IOException e) {
+                e.printStackTrace();
+                responseStatus = "POST_ERROR";
+            } finally {
+                if (outStream != null) {
+                    outStream.close();
+                }
+            }
+
+            final int status = httpConn.getResponseCode();
+
+            if (status == HttpURLConnection.HTTP_OK) {
+                responseStatus = "HTTP_OK";
+
+                // Get the html here
+                InputStream stream = httpConn.getInputStream();
+                StringBuffer stringBuffer = new StringBuffer();
+                String line;
+                BufferedReader br = new BufferedReader(new InputStreamReader(stream, "UTF-8"));
+                while ((line = br.readLine()) != null) {
+                    stringBuffer.append(line);
+                }
+
+                try {
+                    stream.close();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                htmlResult = stringBuffer.toString();
+            }
+            else{
+                responseStatus = "STATUS="+String.valueOf(status);
+            }
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (httpConn != null) {
+                httpConn.disconnect();
+            }
+        }
+
+        PostUrlResult result = new PostUrlResult(responseStatus, htmlResult);
+        return result;
+    }
+
+    // 非同期処理が終了後、結果をメインスレッドに返す
+    @Override
+    protected void onPostExecute(PostUrlResult result) {
+        super.onPostExecute(result);
+
+        if (listener != null) {
+            listener.onSuccess(result);
+        }
+    }
+
+    void setListener(Listener listener) {
+        this.listener = listener;
+    }
+
+    interface Listener {
+        void onSuccess(PostUrlResult result);
     }
 }
